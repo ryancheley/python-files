@@ -7,6 +7,7 @@ def get_beautiful_soup(url):
 		
 soup = get_beautiful_soup(myurl)
 tablemgmt = soup.findAll('div', attrs={'id':re.compile('our-team')})
+tableimage = soup.findAll('img', attrs={'class':re.compile('team-pic')})
 
 list_of_names = []
 for i in tablemgmt:
@@ -21,7 +22,12 @@ for i in tablemgmt:
 		if len(text)>0:
 			list_of_titles.append(text)
 
-print('| Name | Title |')
-print('| --- | --- |')
-for j, k in zip(list_of_names, list_of_titles):
-	print('|'+ j + '|' + k + '|')
+list_of_images = []
+for i in range(len(tableimage)):
+	text = '![alt text](http://www.graphtek.com/'+tableimage[i]['src']+' "'+tableimage[i]['alt']+'")'
+	list_of_images.append(text)
+
+print('| Name | Title | Image |')
+print('| --- | --- | --- |')
+for j, k, l in zip(list_of_names, list_of_titles, list_of_images):
+	print('|'+ j + '|' + k + '|' + l + '|' )
