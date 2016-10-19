@@ -31,3 +31,5 @@ print('| Name | Title | Image |')
 print('| --- | --- | --- |')
 for j, k, l in zip(list_of_names, list_of_titles, list_of_images):
 	print('|'+ j + '|' + k + '|' + l + '|' )
+
+#This is me adding a comment
