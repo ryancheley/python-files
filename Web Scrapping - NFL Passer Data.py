@@ -1,81 +1,20 @@
-For the first time in **many** years I've joined a [Fantasy Football league](http://www.espn.com) with some of my family. One of the reasons I have not engaged in the Fantasy football is that, frankly, I'm not very good. In fact, I'm pretty bad. I have a passing interest in Football, but my interests lie more with Baseball than football (especially in light of the NFLs policy on punishing players for some infractions of league rules, but not punishing them for infractions of societal norms (see Tom Brady and Ray Lewis respectively). 
-
-That being said, I am in a Fantasy Football league this year, and as of this writing am a respectable 5-5 and only 2 games back from making the playoffs with 3 games left. 
-
-This means that what I started on yesterday I really should have started on much sooner, but I didn't.
-
-I had been counting on ESPN's 'projected points' to help guide me to victory ... it's working about as well as flipping a coin (see my record above).
-
-I had a couple of days off from work this week and some time to tinker with Python, so I thought, what the hell, let's see what I can do.
-
-Just to see what other people had done I did a quick [Google Search](http://www.google.com) and found [someone that had done what I was trying to do with data from the NBA in 2013](http://danielfrg.com/blog/2013/04/01/nba-scraping-data/).
-
-Using their post as a model I set to work. 
-
-The basic strategy I am mimicking is to:
-
-* Get the Teams and put them into a dictionary
-* Get the 'matches' and put them into a dictionary
-* Get the player stats and put them into a dictionary for later analysis
-
-I start of importing some standard libraries `pandas`, `requests`, and `BeautifulSoup` (the other libraries are for later).
-
-```
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import csv
 import numpy as np
 from datetime import datetime, date
-```
 
-Next, I need to set up some variables. [`BeautifulSoup` is a Python library for pulling data out of HTML and XML files.](https://www.crummy.com/software/BeautifulSoup/bs4/doc/). It's pretty sweet. The code below is declaring a URL to scrape and then users the `requests` library to get the actual `HTML` of the page and put it into a variable called `r`. 
-
-```
 url = 'http://espn.go.com/nfl/teams'
 r = requests.get(url)
-```
 
-`r` has a method called `text` which I'll use with `BeautifulSoup` to create the `soup`. The `'lxml'` declares the parser type to be used. The default is `lxml` and when I left it off I was presented with a warning, so I decided to explicitly state which parser I was going to be using to avoid the warning.  
-
-```
 soup = BeautifulSoup(r.text, 'lxml')
-```
-
-Next I use the `find_all` function from `BeautifulSoup`. The cool thing about `find_all` is that you can either pass just a tag element, i.e. `li` or `p`, but you can add an additional `class_` argument (notice the underscore at the end ... I  missed it more than once and got an error because `class` is a keyword used by `Python`). Below I'm getting all of the `ul' elements of the class type 'medium-logos'.
-
-```
 tables = soup.find_all('ul', class_='medium-logos')
-```
 
-Now I set up some `list` variables to hold the items I'll need for later use to create my `dictionary`
-
-```
 teams = []
 prefix_1 = []
 prefix_2 = []
 teams_urls = []
-```
-
-Now, we do some *actual* programming:
-
-Using a nested `for` loop to find all of the `li` elements in the variable called `lis` which is based on the variable `tables` (recall this is all of the `HTML` from the page I scrapped that has *only* the tags that match `<ul class='medium-logos></ul>` and all of the content between them).
-
-The nested `for` loop creates 2 new variables which are used to populate the 4 lists from above. The creating of the `info` variable gets the a tag from the li tags. The `url` variable takes the `href` tag from the `info` variable. In order to add an item to a list (remember, all of the lists above are empty at this point) we have to invoke the method `append` on each of the lists with the data that we care about (as we look through). 
-
-The function `split` can be used on a string (which `url` is). It allows you to take a string apart based on a passed through value and convert the output into a list. This is super useful with URLs since there are many cases where we're trying to get to the path. Using `split('/')` allows the URL to be broken into it's constituent parts. The negative indexes used allows you to go from right to left instead of left to right. 
-
-To really break this down a bit, if we looked at just one of the URLs we'd get this:
-
-`http://www.espn.com/nfl/team/_/name/ten/tennessee-titans`
-
-The `split('/')` command will turn the URL into this:
-
-`['http:', '', 'www.espn.com', 'nfl', 'team', '_', 'name', 'ten', 'tennessee-titans']`
-
-Using the negative index allows us to get the right most 2 values that we need. 
-
-```
 for table in tables:
     lis = table.find_all('li')
     for li in lis:
@@ -85,13 +24,133 @@ for table in tables:
         teams_urls.append(url)
         prefix_1.append(url.split('/')[-2])
         prefix_2.append(url.split('/')[-1])
-```
 
-Now we put it all together into a dictionary
 
-```
 dic = {'url': teams_urls, 'prefix_2': prefix_2, 'prefix_1': prefix_1, 'team': teams}
 teams = pd.DataFrame(dic)
-```
 
-This is the end of part 1. Parts 2 and 3 will be coming later this week.
+#rows = zip(teams['prefix_1'],teams['prefix_2'],teams['team'],teams['url']) # I don't think I need this
+
+year = 2016
+BASE_URL = 'http://espn.go.com/nfl/team/schedule/_/name/{0}/year/{1}/{2}'
+
+match_id = []
+
+for index, row in teams.iterrows():
+    _team, url = row['team'], row['url']
+    r=requests.get(BASE_URL.format(row['prefix_1'], year, row['prefix_2']))
+    table = BeautifulSoup(r.text, 'lxml').table
+
+    for row in table.find_all('tr')[2:]: # Remove header
+        columns = row.find_all('td')
+        try:
+            for link in columns[3].find_all('a'): # I realized here that I didn't need to do the fancy thing from the site I was mimicking http://danielfrg.com/blog/2013/04/01/nba-scraping-data/
+                match_id.append(link.get('href')[-9:])
+        except Exception as e:
+            pass
+        
+gamesdic = {'match_id': match_id}
+
+games = pd.DataFrame(gamesdic).drop_duplicates(subset='match_id').set_index('match_id')
+
+#start to get the information on the players
+
+BASE_URL = 'http://www.espn.com/nfl/boxscore/_/gameId/{0}'
+
+#Create the lists to hold the values for the games for the passers
+player_pass_name = []
+player_pass_catch = []
+player_pass_attempt = []
+player_pass_yds = []
+player_pass_avg = []
+player_pass_td = []
+player_pass_int = []
+player_pass_sacks = []
+player_pass_sacks_yds_lost = []
+player_pass_rtg = []
+player_id = [] #declare the player_id as a list so it doesn't get set to a str by the loop below
+
+headers_pass = ['id', 'Name', 'CATCHES','ATTEMPTS', 'YDS', 'AVG', 'TD', 'INT', 'SACKS', 'YRDLSTSACKS', 'RTG']
+
+for index, row in games.iterrows():
+    print(index)
+    try:
+        request = requests.get(BASE_URL.format(index))
+        #request = requests.get('http://www.espn.com/nfl/boxscore/_/gameId/400873869')
+        
+        table_pass = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-passing')
+        #table_rush = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-rushing')
+        #table_rec = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-receiving')
+        #table_fum = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-fumbles')
+        #table_def = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-defensive')
+        #table_int = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-interceptions')
+        #table_kR = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-kickReturns')
+        #table_pR = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-puntReturns')
+        #table_kick = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-kicking')
+        #table_punt = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-punting')
+        
+        pass_ = table_pass[0]
+        player_pass_all = pass_.find_all('tr')
+
+        for tr in player_pass_all:
+            for td in tr.find_all('td', class_='sacks'):
+                for t in tr.find_all('td', class_='name'):
+                    if t.text != 'TEAM':
+                        player_pass_sacks.append(int(td.text[0:td.text.index('-')]))
+                        player_pass_sacks_yds_lost.append(int(td.text[td.text.index('-')+1:]))
+                        #player_pass_sacks.append(td.text)
+
+            for td in tr.find_all('td', class_='c-att'):
+                for t in tr.find_all('td', class_='name'):
+                    if t.text != 'TEAM':
+                        player_pass_catch.append(int(td.text[0:td.text.index('/')]))
+                        player_pass_attempt.append(int(td.text[td.text.index('/')+1:]))
+            for td in tr.find_all('td', class_='name'):
+                for t in tr.find_all('td', class_='name'):
+                    for s in t.find_all('span', class_=''):
+                        if t.text != 'TEAM':
+                            player_pass_name.append(s.text)
+            for td in tr.find_all('td', class_='yds'):
+                for t in tr.find_all('td', class_='name'):
+                    if t.text != 'TEAM':
+                        player_pass_yds.append(int(td.text))
+            for td in tr.find_all('td', class_='avg'):
+                for t in tr.find_all('td', class_='name'):
+                    if t.text != 'TEAM':
+                        player_pass_avg.append(float(td.text))
+            for td in tr.find_all('td', class_='td'):
+                for t in tr.find_all('td', class_='name'):
+                    if t.text != 'TEAM':
+                        player_pass_td.append(int(td.text))
+            for td in tr.find_all('td', class_='int'):
+                for t in tr.find_all('td', class_='name'):
+                    if t.text != 'TEAM':
+                        player_pass_int.append(int(td.text))
+            for td in tr.find_all('td', class_='rtg'):
+                for t in tr.find_all('td', class_='name'):
+                    if t.text != 'TEAM':
+                        player_pass_rtg.append(float(td.text))
+            #The code below cycles through the passers and gets their ESPN Player ID
+            for a in tr.find_all('a', href=True):
+                player_id.append(a['href'].replace("http://www.espn.com/nfl/player/_/id/","")[0:a['href'].replace("http://www.espn.com/nfl/player/_/id/","").index('/')])
+
+    except Exception as e:
+        pass
+
+player_passer_data = pd.DataFrame(np.column_stack((
+player_id, 
+player_pass_name, 
+player_pass_catch,
+player_pass_attempt, 
+player_pass_yds,
+player_pass_avg,
+player_pass_td, 
+player_pass_int, 
+player_pass_sacks,
+player_pass_sacks_yds_lost,
+player_pass_rtg
+)), columns=headers_pass)
+
+player_passer_data[['TD', 'CATCHES', 'ATTEMPTS', 'YDS', 'INT', 'SACKS', 'YRDLSTSACKS','AVG','RTG']] = player_passer_data[['TD', 'CATCHES', 'ATTEMPTS', 'YDS', 'INT', 'SACKS', 'YRDLSTSACKS','AVG','RTG']].apply(pd.to_numeric) #got this from http://stackoverflow.com/questions/15891038/pandas-change-data-type-of-columns
+
+passer_name = player_passer_data.groupby('Name')
