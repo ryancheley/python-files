@@ -1,9 +1,11 @@
+# Start Section 1 (see Blog Post for more details on documentation: https://www.ryancheley.com/blog/2016/11/17/web-scrapping)
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import csv
 import numpy as np
 from datetime import datetime, date
+from time import strptime
 
 url = 'http://espn.go.com/nfl/teams'
 r = requests.get(url)
@@ -31,29 +33,49 @@ teams = pd.DataFrame(dic)
 
 #rows = zip(teams['prefix_1'],teams['prefix_2'],teams['team'],teams['url']) # I don't think I need this
 
-year = 2016
-BASE_URL = 'http://espn.go.com/nfl/team/schedule/_/name/{0}/year/{1}/{2}'
+#Start Section 2 (post to be written with documentation)
+
+year = 2016 # allows us to change the year that we are interested in.
+nfl_start_date = date(2016, 9, 8)
+BASE_URL = 'http://espn.go.com/nfl/team/schedule/_/name/{0}/year/{1}/{2}' #URL that we'll use to cycle through to get the gameid's (called match_id)
 
 match_id = []
+week_id = []
+week_date = []
+match_result = []
+ha_ind = []
+team_list = []
 
 for index, row in teams.iterrows():
     _team, url = row['team'], row['url']
     r=requests.get(BASE_URL.format(row['prefix_1'], year, row['prefix_2']))
     table = BeautifulSoup(r.text, 'lxml').table
-
     for row in table.find_all('tr')[2:]: # Remove header
         columns = row.find_all('td')
         try:
+            for result in columns[3].find('li'):
+                match_result.append(result.text)
+                week_id.append(columns[0].text) #get the week_id for the games dictionary so I know what week everything happened
+                _date = date(
+                    year,
+                    int(strptime(columns[1].text.split(' ')[1], '%b').tm_mon),
+                    int(columns[1].text.split(' ')[2])
+                )
+                week_date.append(_date)
+                team_list.append(_team)
+                for ha in columns[2].find_all('li', class_="game-status"):
+                    ha_ind.append(ha.text)
             for link in columns[3].find_all('a'): # I realized here that I didn't need to do the fancy thing from the site I was mimicking http://danielfrg.com/blog/2013/04/01/nba-scraping-data/
                 match_id.append(link.get('href')[-9:])
+
         except Exception as e:
             pass
-        
-gamesdic = {'match_id': match_id}
 
-games = pd.DataFrame(gamesdic).drop_duplicates(subset='match_id').set_index('match_id')
+gamesdic = {'match_id': match_id, 'week_id': week_id, 'result': match_result, 'ha_ind': ha_ind, 'team': team_list, 'match_date': week_date}
 
-#start to get the information on the players
+games = pd.DataFrame(gamesdic).set_index('match_id')
+'''
+#Start Section 3 (post to be written with documentation) to get the information on the passers
 
 BASE_URL = 'http://www.espn.com/nfl/boxscore/_/gameId/{0}'
 
@@ -70,14 +92,17 @@ player_pass_sacks_yds_lost = []
 player_pass_rtg = []
 player_id = [] #declare the player_id as a list so it doesn't get set to a str by the loop below
 
-headers_pass = ['id', 'Name', 'CATCHES','ATTEMPTS', 'YDS', 'AVG', 'TD', 'INT', 'SACKS', 'YRDLSTSACKS', 'RTG']
+headers_pass = ['id', 'week_num', 'Name', 'CATCHES','ATTEMPTS', 'YDS', 'AVG', 'TD', 'INT', 'SACKS', 'YRDLSTSACKS', 'RTG']
+
+print(gamesdic['week_id'][10:25])
+
+for index in games.iteritems():
+    print(week_id, match_id)
 
 for index, row in games.iterrows():
-    print(index)
     try:
         request = requests.get(BASE_URL.format(index))
         #request = requests.get('http://www.espn.com/nfl/boxscore/_/gameId/400873869')
-        
         table_pass = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-passing')
         #table_rush = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-rushing')
         #table_rec = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-receiving')
@@ -154,3 +179,4 @@ player_pass_rtg
 player_passer_data[['TD', 'CATCHES', 'ATTEMPTS', 'YDS', 'INT', 'SACKS', 'YRDLSTSACKS','AVG','RTG']] = player_passer_data[['TD', 'CATCHES', 'ATTEMPTS', 'YDS', 'INT', 'SACKS', 'YRDLSTSACKS','AVG','RTG']].apply(pd.to_numeric) #got this from http://stackoverflow.com/questions/15891038/pandas-change-data-type-of-columns
 
 passer_name = player_passer_data.groupby('Name')
+'''
