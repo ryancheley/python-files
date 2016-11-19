@@ -45,6 +45,7 @@ week_date = []
 match_result = []
 ha_ind = []
 team_list = []
+opp_list = []
 
 for index, row in teams.iterrows():
     _team, url = row['team'], row['url']
@@ -65,17 +66,33 @@ for index, row in teams.iterrows():
                 team_list.append(_team)
                 for ha in columns[2].find_all('li', class_="game-status"):
                     ha_ind.append(ha.text)
+                for ha in columns[2].find_all('li', class_="team-logo-small"):
+                    for a in ha.find_all('a', href=True):
+                        opp_list.append(a['href'].split('/')[-1])
+
             for link in columns[3].find_all('a'): # I realized here that I didn't need to do the fancy thing from the site I was mimicking http://danielfrg.com/blog/2013/04/01/nba-scraping-data/
                 match_id.append(link.get('href')[-9:])
 
         except Exception as e:
             pass
 
-gamesdic = {'match_id': match_id, 'week_id': week_id, 'result': match_result, 'ha_ind': ha_ind, 'team': team_list, 'match_date': week_date}
+gamesdic = {'match_id': match_id, 'week_id': week_id, 'result': match_result, 'ha_ind': ha_ind, 'team': team_list, 'match_date': week_date, 'opp': opp_list}
 
 games = pd.DataFrame(gamesdic).set_index('match_id')
-'''
+#games = games.merge(teams, how='left', left_on='opp', right_on='prefix_2')
+games = games.reset_index().merge(teams, how='left', left_on='opp', right_on='prefix_2').set_index('match_id')
+
 #Start Section 3 (post to be written with documentation) to get the information on the passers
+
+print(games.head())
+
+reg_season_games = games.loc[games['match_date'] >= nfl_start_date]
+pre_season_games = games.loc[games['match_date'] < nfl_start_date]
+
+gameshome = reg_season_games.loc[reg_season_games['ha_ind'] == 'vs']
+gamesaway = reg_season_games.loc[reg_season_games['ha_ind'] == '@']
+
+
 
 BASE_URL = 'http://www.espn.com/nfl/boxscore/_/gameId/{0}'
 
@@ -90,20 +107,29 @@ player_pass_int = []
 player_pass_sacks = []
 player_pass_sacks_yds_lost = []
 player_pass_rtg = []
+player_pass_week_id = []
+player_pass_result = []
+player_pass_team = []
+player_pass_ha_ind = []
+player_match_id = []
 player_id = [] #declare the player_id as a list so it doesn't get set to a str by the loop below
 
-headers_pass = ['id', 'week_num', 'Name', 'CATCHES','ATTEMPTS', 'YDS', 'AVG', 'TD', 'INT', 'SACKS', 'YRDLSTSACKS', 'RTG']
+headers_pass = ['match_id', 'id', 'Name', 'CATCHES','ATTEMPTS', 'YDS', 'AVG', 'TD', 'INT', 'SACKS', 'YRDLSTSACKS', 'RTG']
 
-print(gamesdic['week_id'][10:25])
+player_pass_week_id.append(gamesaway.week_id)
 
-for index in games.iteritems():
-    print(week_id, match_id)
-
-for index, row in games.iterrows():
+'''
+player_pass_week_id.append(gamesaway.week_id)
+player_pass_result.append(gamesaway.result)
+player_pass_team.append(gamesaway.team)
+player_pass_ha_ind.append(gamesaway.ha_ind)
+'''
+for index, row in gamesaway.iterrows():
+    print(index)
     try:
         request = requests.get(BASE_URL.format(index))
         #request = requests.get('http://www.espn.com/nfl/boxscore/_/gameId/400873869')
-        table_pass = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-passing')
+        table_pass = BeautifulSoup(request.text, 'lxml').find_all('div', class_='col column-one gamepackage-away-wrap')
         #table_rush = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-rushing')
         #table_rec = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-receiving')
         #table_fum = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-fumbles')
@@ -113,9 +139,10 @@ for index, row in games.iterrows():
         #table_pR = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-puntReturns')
         #table_kick = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-kicking')
         #table_punt = BeautifulSoup(request.text, 'lxml').find_all('div', id='gamepackage-punting')
-        
+
         pass_ = table_pass[0]
         player_pass_all = pass_.find_all('tr')
+
 
         for tr in player_pass_all:
             for td in tr.find_all('td', class_='sacks'):
@@ -155,6 +182,7 @@ for index, row in games.iterrows():
                 for t in tr.find_all('td', class_='name'):
                     if t.text != 'TEAM':
                         player_pass_rtg.append(float(td.text))
+                        player_match_id.append(index)
             #The code below cycles through the passers and gets their ESPN Player ID
             for a in tr.find_all('a', href=True):
                 player_id.append(a['href'].replace("http://www.espn.com/nfl/player/_/id/","")[0:a['href'].replace("http://www.espn.com/nfl/player/_/id/","").index('/')])
@@ -163,6 +191,7 @@ for index, row in games.iterrows():
         pass
 
 player_passer_data = pd.DataFrame(np.column_stack((
+player_match_id,
 player_id, 
 player_pass_name, 
 player_pass_catch,
@@ -176,7 +205,14 @@ player_pass_sacks_yds_lost,
 player_pass_rtg
 )), columns=headers_pass)
 
+print(player_passer_data.head())
+print(gamesaway.head())
+
+game_passer_data = player_passer_data.join(gamesaway, on='match_id')
+game_passer_data = game_passer_data.drop(['opp', 'prefix_1', 'prefix_2', 'url'], 1)
+game_passer_data.columns = ['match_id', 'id', 'Name', 'Catches', 'Attempts', 'YDS', 'Avg', 'TD', 'INT', 'Sacks', 'Yards_Lost_Sacks', 'Rating', 'HA_Ind', 'game_date', 'Result', 'Team,', 'Week', 'Opponent']
+
 player_passer_data[['TD', 'CATCHES', 'ATTEMPTS', 'YDS', 'INT', 'SACKS', 'YRDLSTSACKS','AVG','RTG']] = player_passer_data[['TD', 'CATCHES', 'ATTEMPTS', 'YDS', 'INT', 'SACKS', 'YRDLSTSACKS','AVG','RTG']].apply(pd.to_numeric) #got this from http://stackoverflow.com/questions/15891038/pandas-change-data-type-of-columns
 
 passer_name = player_passer_data.groupby('Name')
-'''
+
