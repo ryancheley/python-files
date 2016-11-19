@@ -33,7 +33,7 @@ teams = pd.DataFrame(dic)
 
 #rows = zip(teams['prefix_1'],teams['prefix_2'],teams['team'],teams['url']) # I don't think I need this
 
-#Start Section 2 (post to be written with documentation)
+#Start Section 2: see https://www.ryancheley.com/blog/2016/11/18/web-scrapping-passer-data-part-ii
 
 year = 2016 # allows us to change the year that we are interested in.
 nfl_start_date = date(2016, 9, 8)
@@ -79,20 +79,15 @@ for index, row in teams.iterrows():
 gamesdic = {'match_id': match_id, 'week_id': week_id, 'result': match_result, 'ha_ind': ha_ind, 'team': team_list, 'match_date': week_date, 'opp': opp_list}
 
 games = pd.DataFrame(gamesdic).set_index('match_id')
-#games = games.merge(teams, how='left', left_on='opp', right_on='prefix_2')
 games = games.reset_index().merge(teams, how='left', left_on='opp', right_on='prefix_2').set_index('match_id')
 
-#Start Section 3 (post to be written with documentation) to get the information on the passers
-
-print(games.head())
+#Start Section 3: see https://www.ryancheley.com/blog/2016/11/19/web-scrapping-passer-data-part-iii
 
 reg_season_games = games.loc[games['match_date'] >= nfl_start_date]
 pre_season_games = games.loc[games['match_date'] < nfl_start_date]
 
 gameshome = reg_season_games.loc[reg_season_games['ha_ind'] == 'vs']
 gamesaway = reg_season_games.loc[reg_season_games['ha_ind'] == '@']
-
-
 
 BASE_URL = 'http://www.espn.com/nfl/boxscore/_/gameId/{0}'
 
@@ -117,13 +112,10 @@ player_id = [] #declare the player_id as a list so it doesn't get set to a str b
 headers_pass = ['match_id', 'id', 'Name', 'CATCHES','ATTEMPTS', 'YDS', 'AVG', 'TD', 'INT', 'SACKS', 'YRDLSTSACKS', 'RTG']
 
 player_pass_week_id.append(gamesaway.week_id)
-
-'''
-player_pass_week_id.append(gamesaway.week_id)
 player_pass_result.append(gamesaway.result)
-player_pass_team.append(gamesaway.team)
+player_pass_team.append(gamesaway.team_x)
 player_pass_ha_ind.append(gamesaway.ha_ind)
-'''
+
 for index, row in gamesaway.iterrows():
     print(index)
     try:
@@ -150,8 +142,6 @@ for index, row in gamesaway.iterrows():
                     if t.text != 'TEAM':
                         player_pass_sacks.append(int(td.text[0:td.text.index('-')]))
                         player_pass_sacks_yds_lost.append(int(td.text[td.text.index('-')+1:]))
-                        #player_pass_sacks.append(td.text)
-
             for td in tr.find_all('td', class_='c-att'):
                 for t in tr.find_all('td', class_='name'):
                     if t.text != 'TEAM':
@@ -205,14 +195,11 @@ player_pass_sacks_yds_lost,
 player_pass_rtg
 )), columns=headers_pass)
 
-print(player_passer_data.head())
-print(gamesaway.head())
-
-game_passer_data = player_passer_data.join(gamesaway, on='match_id')
-game_passer_data = game_passer_data.drop(['opp', 'prefix_1', 'prefix_2', 'url'], 1)
-game_passer_data.columns = ['match_id', 'id', 'Name', 'Catches', 'Attempts', 'YDS', 'Avg', 'TD', 'INT', 'Sacks', 'Yards_Lost_Sacks', 'Rating', 'HA_Ind', 'game_date', 'Result', 'Team,', 'Week', 'Opponent']
-
 player_passer_data[['TD', 'CATCHES', 'ATTEMPTS', 'YDS', 'INT', 'SACKS', 'YRDLSTSACKS','AVG','RTG']] = player_passer_data[['TD', 'CATCHES', 'ATTEMPTS', 'YDS', 'INT', 'SACKS', 'YRDLSTSACKS','AVG','RTG']].apply(pd.to_numeric) #got this from http://stackoverflow.com/questions/15891038/pandas-change-data-type-of-columns
 
-passer_name = player_passer_data.groupby('Name')
+game_passer_data = player_passer_data.join(gamesaway, on='match_id').set_index('match_id')
+
+game_passer_data = game_passer_data.drop(['opp', 'prefix_1', 'prefix_2', 'url'], 1)
+game_passer_data.columns = ['id', 'Name', 'Catches', 'Attempts', 'YDS', 'Avg', 'TD', 'INT', 'Sacks', 'Yards_Lost_Sacks', 'Rating', 'HA_Ind', 'game_date', 'Result', 'Team', 'Week', 'Opponent']
+
 
