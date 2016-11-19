@@ -66,10 +66,10 @@ for index, row in teams.iterrows():
                 team_list.append(_team)
                 for ha in columns[2].find_all('li', class_="game-status"):
                     ha_ind.append(ha.text)
-                for ha in columns[2].find_all('li', class_="team-logo-small"):
+                for ha in columns[2].find_all('li', class_="team-logo-small"): #Added the next 3 lines for work that was done for the player stats portion
                     for a in ha.find_all('a', href=True):
                         opp_list.append(a['href'].split('/')[-1])
-
+                #End section added for player stats portion
             for link in columns[3].find_all('a'): # I realized here that I didn't need to do the fancy thing from the site I was mimicking http://danielfrg.com/blog/2013/04/01/nba-scraping-data/
                 match_id.append(link.get('href')[-9:])
 
