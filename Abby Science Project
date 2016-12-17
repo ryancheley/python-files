@@ -1,0 +1,81 @@
+#Brightness functions found on http://stackoverflow.com/questions/3490727/what-are-some-methods-to-analyze-image-brightness-using-python
+from PIL import Image, ImageStat
+import math
+import glob
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+#Covert image to greyscale, return average pixel brightness.
+def brightness01( im_file ):
+   im = Image.open(im_file).convert('L')
+   stat = ImageStat.Stat(im)
+   return stat.mean[0]
+   
+#Covert image to greyscale, return RMS pixel brightness.
+def brightness02( im_file ):
+   im = Image.open(im_file).convert('L')
+   stat = ImageStat.Stat(im)
+   return stat.rms[0]
+
+f = []
+img_brightness01 = []
+img_brightness02 = []
+trial = []
+state = []
+method = []
+for filename in glob.glob('/Users/Ryan/Dropbox/Abby/Science project 2016/cropped images/**/*', recursive=True):
+    f.append(filename.split('/')[-1])
+    img_brightness01.append(round(brightness01(filename),0))
+    img_brightness02.append(round(brightness02(filename),0))
+for part in f:
+    trial.append(part.split('_')[0])
+    state.append(part.split('_')[1])
+    method.append(part.split('_')[2].replace('.png', '').replace('.jpg',''))
+
+dic = {'TrialNumber': trial, 'SampleState': state, 'CleaningMethod': method, 'BrightnessLevel01': img_brightness01, 'BrightnessLevel02': img_brightness02}
+
+results = pd.DataFrame(dic)
+
+#write to a csv file
+results.to_csv('/Users/Ryan/Dropbox/Abby/Science project 2016/results.csv')
+
+
+
+#Create Bar Charts
+trials = ['Trial1','Trial2','Trial3']
+
+n_trials = len(trials)
+index = np.arange(n_trials)
+bar_width = 0.25
+bar_buffer = 0.05
+opacity = 0.4
+
+graph_color = ['b', 'r', 'g', 'k']
+methods = ['Water', 'SoapAndWater', 'Milk', 'AlmondMilk']
+
+graph_data = []
+for singlemethod in methods:
+    score= []
+    for trialnumber in trials:
+        s = results.loc[results['CleaningMethod'] == singlemethod].loc[results['TrialNumber'] == trialnumber].loc[results['SampleState'] == 'Start'][['BrightnessLevel01']]
+        s = list(s.values.flatten())[0]
+        d = results.loc[results['CleaningMethod'] == singlemethod].loc[results['TrialNumber'] == trialnumber].loc[results['SampleState'] == 'Dirty'][['BrightnessLevel01']]
+        d = list(d.values.flatten())[0]
+        c = results.loc[results['CleaningMethod'] == singlemethod].loc[results['TrialNumber'] == trialnumber].loc[results['SampleState'] == 'Clean'][['BrightnessLevel01']]
+        c = list(c.values.flatten())[0]
+        scorepct =  float((c-d) / (s - d))
+        score.append(scorepct)
+    graph_data.append(score)
+
+for i in range(0, len(graph_data)):
+    plt.bar(index+ (bar_width)*i, graph_data[i], bar_width-.05, alpha=opacity,color=graph_color[i],label=methods[i])
+    plt.xlabel('Trial Number')
+    plt.axvline(x=i-.025, color='k', linestyle='--')
+    plt.xticks(index+bar_width*2, trials)
+    plt.yticks((-1,-.75, -.5, -.25, 0,0.25, 0.5, 0.75, 1))
+    plt.ylabel('Brightness Percent Score')
+    plt.title('Comparative Brightness Scores') 
+    plt.legend(loc=3)
+
+
