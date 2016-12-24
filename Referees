@@ -1,0 +1,83 @@
+from bs4 import BeautifulSoup
+import pandas as pd
+import requests
+import matplotlib.pyplot as plt
+import scipy
+import numpy
+
+url = 'http://www.espn.com/blog/nflnation/post/_/id/225804/aaron-rodgers-could-get-some-help-from-referee-jeff-triplette'
+r = requests.get(url)
+
+tables = BeautifulSoup(r.text, 'lxml').find_all('table', class_='inline-table')
+
+CrewName = []
+DefOffside = []
+Encroach = []
+FalseStart = []
+NeutralZone = []
+
+for table in tables:
+    for row in table.find_all('tr'):
+        columns = row.find_all('td')
+        try:
+            CrewName.append(columns[0].text)
+            DefOffside.append(int(columns[1].text))
+            Encroach.append(int(columns[2].text))
+            FalseStart.append(int(columns[3].text))
+            NeutralZone.append(int(columns[4].text))
+        except Exception as e:
+            pass
+
+print('| REFEREE | DEF. OFFSIDE | ENCROACH | FALSE START | NEUTRAL ZONE |')
+print('| --- | --- | --- | --- | --- |')
+for i in range(0, len(CrewName)):
+    print('|'+CrewName[i]+ '|'+str(DefOffside[i])+ '|'+str(Encroach[i])+ '|'+str(FalseStart[i])+ '|'+str(NeutralZone[i])+ '|')
+        
+dic = {'Crew': CrewName, 'DefOffside': DefOffside, 'Encroach': Encroach, 'FalseStart': FalseStart, 'NeutralZone': NeutralZone}
+
+Penalties = pd.DataFrame(dic)
+
+Offensive = Penalties[['FalseStart']]
+Deffensive = Penalties['DefOffside'] + Penalties['Encroach'] + Penalties['NeutralZone']
+
+#for i in range(0, len(CrewName)):
+
+N = len(CrewName)
+x = Offensive
+y = Deffensive
+
+xMax = x.max()['FalseStart']
+xMin = x.min()['FalseStart']
+yMax = y.max()
+yMin = y.min()
+
+xMean = x.mean()['FalseStart']
+yMean = y.mean()
+xstd = x.std()['FalseStart']
+ystd = y.std()
+
+StdDevs = 2
+
+plt.scatter(x,y)
+plt.xlabel('Offensive Penalties')
+plt.ylabel('Deffensive Penalties')
+plt.title('Referee Crew Penalty Calls') 
+
+plt.axvline(x=xMean, ls="--")
+
+graph_expansion = 15
+
+borders = [(xMean-StdDevs*xstd)-graph_expansion, (xMean+StdDevs*xstd)+graph_expansion, (yMean-StdDevs*ystd)-graph_expansion, (yMean+StdDevs*ystd)+graph_expansion]
+box = [(xMean-StdDevs*xstd), (xMean+StdDevs*xstd), (yMean-StdDevs*ystd), (yMean+StdDevs*ystd)]
+
+plt.axhspan(ymin=box[2], ymax=box[3], xmin=(box[0] - borders[0]) / (borders[1] - borders[0]), xmax=(box[1] - borders[0]) / (borders[1] - borders[0]), facecolor='0.5', alpha= 0.25)
+
+
+plt.axis(borders)
+
+plt.axhline(y=yMean, ls="--")
+
+for i in range(0, N):
+    if x.ix[i]['FalseStart'] > xMean+StdDevs*xstd or y.ix[i] > yMean+StdDevs*ystd or x.ix[i]['FalseStart'] < xMean-StdDevs*xstd or y.ix[i] < yMean-StdDevs*ystd:
+        plt.annotate(CrewName[i], (x.ix[i]['FalseStart'],y.ix[i]))    
+plt.show()
